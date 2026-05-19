@@ -1,0 +1,203 @@
+import { defineStore } from 'pinia'
+import { ref, computed, shallowRef } from 'vue'
+import { v4 as uuid } from 'uuid'
+import { cloneDeep } from 'lodash-es'
+import type { SignDocument, SignField, FieldType, FieldPosition } from '@/types'
+import { FIELD_CATALOG } from '@/constants/fields'
+import { useDocumentStore } from './document'
+import { useHistoryStore } from './history'
+
+export const useEditorStore = defineStore('editor', () => {
+  const document = shallowRef<SignDocument | null>(null)
+  const selectedIds = ref<Set<string>>(new Set())
+  const hoveredId = ref<string | null>(null)
+  const zoom = ref(1)
+  const currentPage = ref(1)
+  const isSaving = ref(false)
+  const lastSavedAt = ref<number | null>(null)
+  const mode = ref<'prepare' | 'preview'>('prepare')
+
+  const fields = computed(() => document.value?.fields ?? [])
+  const fieldsByPage = computed(() => {
+    const map = new Map<number, SignField[]>()
+    for (const f of fields.value) {
+      if (!map.has(f.position.page)) map.set(f.position.page, [])
+      map.get(f.position.page)!.push(f)
+    }
+    return map
+  })
+  const selectedFields = computed(() =>
+    fields.value.filter((f) => selectedIds.value.has(f.id))
+  )
+  const primarySelection = computed<SignField | null>(() =>
+    selectedFields.value[0] ?? null
+  )
+
+  function setDocument(doc: SignDocument | null) {
+    document.value = doc ? cloneDeep(doc) : null
+    selectedIds.value = new Set()
+    currentPage.value = 1
+    if (doc) useHistoryStore().reset(doc.fields)
+  }
+
+  function setZoom(level: number) {
+    zoom.value = Math.max(0.4, Math.min(3, level))
+  }
+  function zoomIn() { setZoom(zoom.value + 0.1) }
+  function zoomOut() { setZoom(zoom.value - 0.1) }
+  function resetZoom() { setZoom(1) }
+
+  function selectField(id: string, additive = false) {
+    if (additive) {
+      const next = new Set(selectedIds.value)
+      next.has(id) ? next.delete(id) : next.add(id)
+      selectedIds.value = next
+    } else {
+      selectedIds.value = new Set([id])
+    }
+  }
+  function selectMany(ids: string[]) { selectedIds.value = new Set(ids) }
+  function clearSelection() { selectedIds.value = new Set() }
+
+  function addField(type: FieldType, position: FieldPosition): SignField {
+    const meta = FIELD_CATALOG[type]
+    const field: SignField = {
+      id: uuid(),
+      type,
+      position,
+      label: meta.label,
+      placeholder: meta.label,
+      required: true,
+      locked: false,
+      style: {
+        color: '#0f172a',
+        background: meta.color + '14',
+        borderColor: meta.color,
+        borderWidth: 1,
+        fontSize: 12,
+        fontFamily: 'Inter, sans-serif',
+        align: 'left',
+        radius: 4
+      },
+      createdAt: Date.now(),
+      updatedAt: Date.now()
+    }
+    if (!document.value) throw new Error('No document loaded')
+    document.value.fields = [...document.value.fields, field]
+    selectField(field.id)
+    pushHistory(`Added ${meta.label}`)
+    return field
+  }
+
+  function updateField(id: string, patch: Partial<SignField>) {
+    if (!document.value) return
+    document.value.fields = document.value.fields.map((f) =>
+      f.id === id ? { ...f, ...patch, updatedAt: Date.now() } : f
+    )
+  }
+
+  function updatePosition(id: string, position: Partial<FieldPosition>) {
+    if (!document.value) return
+    document.value.fields = document.value.fields.map((f) =>
+      f.id === id
+        ? { ...f, position: { ...f.position, ...position }, updatedAt: Date.now() }
+        : f
+    )
+  }
+
+  function commitUpdate(label: string) { pushHistory(label) }
+
+  function duplicateSelection() {
+    if (!document.value || selectedIds.value.size === 0) return
+    const copies: SignField[] = []
+    const newIds = new Set<string>()
+    for (const f of selectedFields.value) {
+      const copy: SignField = {
+        ...cloneDeep(f),
+        id: uuid(),
+        position: {
+          ...f.position,
+          x: Math.min(0.98 - f.position.width, f.position.x + 0.02),
+          y: Math.min(0.98 - f.position.height, f.position.y + 0.02)
+        },
+        createdAt: Date.now(),
+        updatedAt: Date.now()
+      }
+      copies.push(copy)
+      newIds.add(copy.id)
+    }
+    document.value.fields = [...document.value.fields, ...copies]
+    selectedIds.value = newIds
+    pushHistory(`Duplicated ${copies.length} field(s)`)
+  }
+
+  function deleteSelection() {
+    if (!document.value || selectedIds.value.size === 0) return
+    const count = selectedIds.value.size
+    document.value.fields = document.value.fields.filter(
+      (f) => !selectedIds.value.has(f.id)
+    )
+    clearSelection()
+    pushHistory(`Deleted ${count} field(s)`)
+  }
+
+  function toggleRequiredSelection() {
+    if (!document.value) return
+    const allRequired = selectedFields.value.every((f) => f.required)
+    document.value.fields = document.value.fields.map((f) =>
+      selectedIds.value.has(f.id) ? { ...f, required: !allRequired } : f
+    )
+    pushHistory('Toggled required')
+  }
+
+  function toggleLockSelection() {
+    if (!document.value) return
+    const allLocked = selectedFields.value.every((f) => f.locked)
+    document.value.fields = document.value.fields.map((f) =>
+      selectedIds.value.has(f.id) ? { ...f, locked: !allLocked } : f
+    )
+    pushHistory('Toggled lock')
+  }
+
+  function pushHistory(label: string) {
+    if (!document.value) return
+    useHistoryStore().push(label, document.value.fields)
+  }
+
+  function restoreFields(snapshot: SignField[]) {
+    if (!document.value) return
+    document.value.fields = cloneDeep(snapshot)
+    selectedIds.value = new Set()
+  }
+
+  async function persist() {
+    if (!document.value) return
+    isSaving.value = true
+    try {
+      const snapshot = { ...document.value, fields: cloneDeep(document.value.fields) }
+      await useDocumentStore().save(snapshot)
+      lastSavedAt.value = Date.now()
+    } finally {
+      isSaving.value = false
+    }
+  }
+
+  function reset() {
+    document.value = null
+    selectedIds.value = new Set()
+    zoom.value = 1
+    currentPage.value = 1
+    lastSavedAt.value = null
+    useHistoryStore().reset([])
+  }
+
+  return {
+    document, fields, fieldsByPage, selectedIds, selectedFields, primarySelection,
+    hoveredId, zoom, currentPage, isSaving, lastSavedAt, mode,
+    setDocument, setZoom, zoomIn, zoomOut, resetZoom,
+    selectField, selectMany, clearSelection,
+    addField, updateField, updatePosition, commitUpdate,
+    duplicateSelection, deleteSelection, toggleRequiredSelection, toggleLockSelection,
+    restoreFields, persist, reset
+  }
+})

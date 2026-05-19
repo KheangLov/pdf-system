@@ -1,0 +1,49 @@
+{
+  "name": "wing-sign",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vue-tsc --noEmit && vite build",
+    "preview": "vite preview",
+    "type-check": "vue-tsc --noEmit"
+  },
+  "dependencies": {
+    "@vueuse/core": "^11.2.0",
+    "dayjs": "^1.11.13",
+    "file-saver": "^2.0.5",
+    "html2canvas": "^1.4.1",
+    "idb": "^8.0.0",
+    "interactjs": "^1.10.27",
+    "jspdf": "^2.5.2",
+    "konva": "^9.3.16",
+    "localforage": "^1.10.0",
+    "lodash-es": "^4.17.21",
+    "nanoid": "^5.0.8",
+    "pdf-lib": "^1.17.1",
+    "pdfjs-dist": "^4.7.76",
+    "pinia": "^2.2.6",
+    "signature_pad": "^5.0.4",
+    "sortablejs": "^1.15.3",
+    "uuid": "^11.0.3",
+    "vee-validate": "^4.14.7",
+    "vue": "^3.5.13",
+    "vue-router": "^4.4.5",
+    "vuetify": "^3.7.5",
+    "zod": "^3.23.8"
+  },
+  "devDependencies": {
+    "@mdi/font": "^7.4.47",
+    "@types/file-saver": "^2.0.7",
+    "@types/lodash-es": "^4.17.12",
+    "@types/sortablejs": "^1.15.8",
+    "@types/uuid": "^10.0.0",
+    "@vitejs/plugin-vue": "^5.2.1",
+    "sass-embedded": "^1.81.0",
+    "typescript": "~5.6.3",
+    "vite": "^6.0.1",
+    "vite-plugin-vuetify": "^2.0.4",
+    "vue-tsc": "^2.1.10"
+  }
+}

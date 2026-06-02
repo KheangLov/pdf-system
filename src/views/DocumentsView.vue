@@ -56,10 +56,11 @@ const filtered = computed(() => {
         mandatory
         color="primary"
         variant="outlined"
+        rounded="pill"
       >
-        <v-btn value="all" size="small">All</v-btn>
-        <v-btn value="draft" size="small">Draft</v-btn>
-        <v-btn value="signed" size="small">Signed</v-btn>
+        <v-btn value="all" size="small" rounded="fill">All</v-btn>
+        <v-btn value="draft" size="small" rounded="fill">Draft</v-btn>
+        <v-btn value="signed" size="small" rounded="fill">Signed</v-btn>
       </v-btn-toggle>
     </div>
 

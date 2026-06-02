@@ -18,9 +18,11 @@ const emit = defineEmits<{
 
 const savedLabel = computed(() => {
   if (editor.isSaving) return 'Saving…'
-  if (!editor.lastSavedAt) return 'Not saved yet'
-  return `Saved ${dayjs(editor.lastSavedAt).format('HH:mm:ss')}`
+  if (!editor.lastSavedAt) return 'Not saved'
+  return `Saved ${dayjs(editor.lastSavedAt).format('HH:mm')}`
 })
+
+const zoomPct = computed(() => Math.round(editor.zoom * 100))
 
 function undo() {
   const snap = history.undo()
@@ -34,110 +36,161 @@ function redo() {
 
 <template>
   <header class="editor-toolbar ws-glass">
+    <!-- Left: back + document meta -->
     <div class="toolbar-section">
-      <v-btn
-        icon="mdi-arrow-left"
-        variant="text"
-        size="small"
+      <button
+        class="tb-icon-btn"
         @click="router.push('/documents')"
         title="Back to documents"
-      />
+        aria-label="Back to documents"
+      >
+        <v-icon icon="mdi-arrow-left" size="18" />
+      </button>
+
       <div class="doc-meta">
         <div class="doc-title">{{ editor.document?.name ?? 'Untitled' }}</div>
         <div class="doc-status">
           <span class="status-dot" :class="{ saving: editor.isSaving }" />
-          {{ savedLabel }}
+          <span>{{ savedLabel }}</span>
         </div>
       </div>
     </div>
 
+    <!-- Center: history, zoom, view toggles -->
     <div class="toolbar-section center">
-      <v-btn-toggle density="compact" variant="text" divided rounded="lg">
-        <v-btn
-          icon="mdi-undo"
-          size="small"
+      <!-- History group -->
+      <div class="tb-group">
+        <button
+          class="tb-icon-btn"
           :disabled="!history.canUndo"
           @click="undo"
           title="Undo (Ctrl+Z)"
-        />
-        <v-btn
-          icon="mdi-redo"
-          size="small"
+          aria-label="Undo"
+        >
+          <v-icon icon="mdi-undo-variant" size="18" />
+        </button>
+        <span class="tb-divider" />
+        <button
+          class="tb-icon-btn"
           :disabled="!history.canRedo"
           @click="redo"
           title="Redo (Ctrl+Shift+Z)"
-        />
-      </v-btn-toggle>
+          aria-label="Redo"
+        >
+          <v-icon icon="mdi-redo-variant" size="18" />
+        </button>
+      </div>
 
-      <v-divider vertical class="mx-2" />
+      <!-- Zoom group -->
+      <div class="tb-group">
+        <button
+          class="tb-icon-btn"
+          :disabled="zoomPct <= 40"
+          @click="editor.zoomOut()"
+          title="Zoom out"
+          aria-label="Zoom out"
+        >
+          <v-icon icon="mdi-minus" size="16" />
+        </button>
+        <span class="tb-divider" />
+        <button
+          class="tb-zoom-label"
+          @click="editor.resetZoom()"
+          title="Reset zoom (Ctrl+0)"
+        >
+          {{ zoomPct }}%
+        </button>
+        <span class="tb-divider" />
+        <button
+          class="tb-icon-btn"
+          :disabled="zoomPct >= 300"
+          @click="editor.zoomIn()"
+          title="Zoom in"
+          aria-label="Zoom in"
+        >
+          <v-icon icon="mdi-plus" size="16" />
+        </button>
+      </div>
 
-      <v-btn-toggle density="compact" variant="text" divided rounded="lg">
-        <v-btn icon="mdi-magnify-minus-outline" size="small" @click="editor.zoomOut()" />
-        <v-btn variant="text" size="small" class="zoom-label" @click="editor.resetZoom()">
-          {{ Math.round(editor.zoom * 100) }}%
-        </v-btn>
-        <v-btn icon="mdi-magnify-plus-outline" size="small" @click="editor.zoomIn()" />
-      </v-btn-toggle>
-
-      <v-divider vertical class="mx-2" />
-
-      <v-btn
-        variant="text"
-        size="small"
-        :prepend-icon="ui.preferences.showGrid ? 'mdi-grid' : 'mdi-grid-off'"
-        @click="ui.updatePreferences({ showGrid: !ui.preferences.showGrid })"
-        title="Toggle grid"
-      >Grid</v-btn>
-
-      <v-btn
-        variant="text"
-        size="small"
-        :prepend-icon="ui.preferences.snapToGrid ? 'mdi-magnet' : 'mdi-magnet-off'"
-        @click="ui.updatePreferences({ snapToGrid: !ui.preferences.snapToGrid })"
-        title="Toggle snap"
-      >Snap</v-btn>
+      <!-- View options -->
+      <div class="tb-group">
+        <button
+          class="tb-icon-btn"
+          :class="{ active: ui.preferences.showGrid }"
+          @click="ui.updatePreferences({ showGrid: !ui.preferences.showGrid })"
+          title="Toggle grid"
+          aria-label="Toggle grid"
+        >
+          <v-icon :icon="ui.preferences.showGrid ? 'mdi-grid' : 'mdi-grid-off'" size="17" />
+        </button>
+        <span class="tb-divider" />
+        <button
+          class="tb-icon-btn"
+          :class="{ active: ui.preferences.snapToGrid }"
+          @click="ui.updatePreferences({ snapToGrid: !ui.preferences.snapToGrid })"
+          title="Toggle snap"
+          aria-label="Toggle snap"
+        >
+          <v-icon :icon="ui.preferences.snapToGrid ? 'mdi-magnet' : 'mdi-magnet-off'" size="17" />
+        </button>
+        <span class="tb-divider" />
+        <button
+          class="tb-icon-btn"
+          :class="{ active: editor.mode === 'preview' }"
+          @click="emit('preview')"
+          :title="editor.mode === 'preview' ? 'Exit preview' : 'Preview signing'"
+          aria-label="Toggle preview"
+        >
+          <v-icon :icon="editor.mode === 'preview' ? 'mdi-eye' : 'mdi-eye-outline'" size="17" />
+        </button>
+      </div>
     </div>
 
+    <!-- Right: theme, save, sign -->
     <div class="toolbar-section end">
-      <v-btn
-        variant="text"
-        size="small"
-        :prepend-icon="ui.preferences.theme === 'dark' ? 'mdi-white-balance-sunny' : 'mdi-weather-night'"
+      <button
+        class="tb-icon-btn"
         @click="ui.toggleTheme()"
-      >Theme</v-btn>
+        :title="ui.preferences.theme === 'dark' ? 'Switch to light theme' : 'Switch to dark theme'"
+        aria-label="Toggle theme"
+      >
+        <v-icon
+          :icon="ui.preferences.theme === 'dark' ? 'mdi-white-balance-sunny' : 'mdi-weather-night'"
+          size="17"
+        />
+      </button>
 
-      <v-btn
-        :variant="editor.mode === 'preview' ? 'tonal' : 'text'"
-        :color="editor.mode === 'preview' ? 'primary' : undefined"
-        size="small"
-        :prepend-icon="editor.mode === 'preview' ? 'mdi-eye' : 'mdi-eye-outline'"
-        @click="emit('preview')"
-      >{{ editor.mode === 'preview' ? 'Previewing' : 'Preview' }}</v-btn>
-
-      <v-btn
-        variant="text"
-        size="small"
-        prepend-icon="mdi-content-save-outline"
+      <button
+        class="tb-text-btn"
         @click="emit('saveTemplate')"
-      >Save template</v-btn>
+        title="Save as template"
+      >
+        <v-icon icon="mdi-bookmark-plus-outline" size="16" />
+        <span>Template</span>
+      </button>
 
-      <v-btn
-        variant="tonal"
-        size="small"
-        color="primary"
-        prepend-icon="mdi-content-save"
+      <button
+        class="tb-text-btn primary"
         @click="emit('save')"
-        :loading="editor.isSaving"
-      >Save</v-btn>
+        :disabled="editor.isSaving"
+        title="Save (Ctrl+S)"
+      >
+        <v-icon
+          :icon="editor.isSaving ? 'mdi-loading' : 'mdi-content-save-outline'"
+          size="16"
+          :class="{ 'mdi-spin': editor.isSaving }"
+        />
+        <span>Save</span>
+      </button>
 
-      <v-btn
-        variant="flat"
-        size="small"
-        color="primary"
-        prepend-icon="mdi-arrow-right"
-        append-icon="mdi-draw-pen"
+      <button
+        class="tb-text-btn cta"
         @click="emit('startSigning')"
-      >Sign now</v-btn>
+        title="Open signing mode"
+      >
+        <v-icon icon="mdi-draw-pen" size="16" />
+        <span>Sign now</span>
+      </button>
     </div>
   </header>
 </template>
@@ -146,17 +199,18 @@ function redo() {
 .editor-toolbar {
   display: flex;
   align-items: center;
-  height: 56px;
-  padding: 0 12px;
-  gap: 12px;
+  height: 60px;
+  padding: 0 14px;
+  gap: 16px;
   border-bottom: 1px solid rgb(var(--v-theme-border));
   z-index: 20;
 }
-.toolbar-section { display: flex; align-items: center; gap: 4px; }
-.toolbar-section.center { flex: 1; justify-content: center; }
-.toolbar-section.end { gap: 6px; }
 
-.doc-meta { line-height: 1.2; padding-left: 4px; min-width: 0; }
+.toolbar-section { display: flex; align-items: center; gap: 8px; min-width: 0; }
+.toolbar-section.center { flex: 1; justify-content: center; }
+
+/* ---------- Document meta ---------- */
+.doc-meta { line-height: 1.25; min-width: 0; padding-left: 2px; }
 .doc-title {
   font-weight: 600;
   font-size: 13.5px;
@@ -165,29 +219,165 @@ function redo() {
   overflow: hidden;
   text-overflow: ellipsis;
   max-width: 240px;
+  color: rgb(var(--v-theme-on-surface));
 }
 .doc-status {
-  font-size: 11px;
-  color: rgb(var(--v-theme-on-surface-variant));
   display: flex;
   align-items: center;
   gap: 6px;
+  font-size: 11px;
+  color: rgb(var(--v-theme-on-surface-variant));
+  font-variant-numeric: tabular-nums;
 }
 .status-dot {
   width: 6px;
   height: 6px;
   border-radius: 50%;
   background: rgb(var(--v-theme-success));
-  &.saving { background: rgb(var(--v-theme-warning)); animation: pulse 1s infinite; }
+  box-shadow: 0 0 0 3px rgba(16, 185, 129, 0.16);
+  &.saving {
+    background: rgb(var(--v-theme-warning));
+    box-shadow: 0 0 0 3px rgba(245, 158, 11, 0.18);
+    animation: pulse 1.2s ease-in-out infinite;
+  }
 }
 @keyframes pulse {
   0%, 100% { opacity: 1; }
-  50% { opacity: 0.4; }
+  50% { opacity: 0.5; }
 }
 
-.zoom-label { min-width: 56px; font-variant-numeric: tabular-nums; }
+/* ---------- Grouped pill (history, zoom, view options) ---------- */
+.tb-group {
+  display: inline-flex;
+  align-items: center;
+  height: 34px;
+  padding: 0 2px;
+  background: rgb(var(--v-theme-surface-variant));
+  border: 1px solid rgb(var(--v-theme-border));
+  border-radius: 10px;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.4);
+}
+[data-theme='dark'] .tb-group {
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.04);
+}
 
-@media (max-width: 1100px) {
-  .toolbar-section.center { display: none; }
+.tb-divider {
+  width: 1px;
+  height: 18px;
+  background: rgb(var(--v-theme-border));
+  margin: 0 1px;
+  flex-shrink: 0;
+}
+
+/* ---------- Buttons ---------- */
+.tb-icon-btn,
+.tb-text-btn,
+.tb-zoom-label {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  height: 30px;
+  padding: 0 8px;
+  border: 0;
+  background: transparent;
+  color: rgb(var(--v-theme-on-surface));
+  font-family: inherit;
+  font-size: 12.5px;
+  font-weight: 500;
+  letter-spacing: -0.005em;
+  border-radius: 7px;
+  cursor: pointer;
+  transition:
+    background 0.12s var(--ws-easing),
+    color 0.12s var(--ws-easing),
+    transform 0.08s var(--ws-easing),
+    box-shadow 0.12s var(--ws-easing);
+  user-select: none;
+  white-space: nowrap;
+
+  &:hover:not(:disabled) {
+    background: rgba(99, 102, 241, 0.10);
+    color: rgb(var(--v-theme-primary));
+  }
+  &:active:not(:disabled) { transform: scale(0.96); }
+  &:disabled {
+    opacity: 0.35;
+    cursor: not-allowed;
+  }
+  &.active {
+    background: rgba(99, 102, 241, 0.14);
+    color: rgb(var(--v-theme-primary));
+  }
+}
+
+.tb-icon-btn {
+  width: 30px;
+  padding: 0;
+}
+
+.tb-zoom-label {
+  min-width: 52px;
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
+  color: rgb(var(--v-theme-on-surface));
+}
+
+/* ---------- Right-side buttons ---------- */
+.tb-text-btn {
+  height: 34px;
+  padding: 0 12px;
+  border: 1px solid rgb(var(--v-theme-border));
+  border-radius: 9px;
+  background: rgb(var(--v-theme-surface));
+  &:hover:not(:disabled) {
+    border-color: rgb(var(--v-theme-primary));
+    background: rgba(99, 102, 241, 0.06);
+  }
+}
+
+.tb-text-btn.primary {
+  border-color: rgba(99, 102, 241, 0.30);
+  background: rgba(99, 102, 241, 0.10);
+  color: rgb(var(--v-theme-primary));
+  &:hover:not(:disabled) {
+    background: rgba(99, 102, 241, 0.18);
+    border-color: rgba(99, 102, 241, 0.50);
+  }
+}
+
+.tb-text-btn.cta {
+  height: 34px;
+  padding: 0 14px;
+  background: linear-gradient(135deg, #6366f1 0%, #7c3aed 100%);
+  color: #fff;
+  border: 1px solid transparent;
+  box-shadow:
+    0 1px 0 rgba(255, 255, 255, 0.20) inset,
+    0 4px 14px rgba(99, 102, 241, 0.30);
+  font-weight: 600;
+  &:hover:not(:disabled) {
+    background: linear-gradient(135deg, #4f46e5 0%, #6d28d9 100%);
+    color: #fff;
+    box-shadow:
+      0 1px 0 rgba(255, 255, 255, 0.24) inset,
+      0 6px 18px rgba(99, 102, 241, 0.42);
+    transform: translateY(-1px);
+  }
+  &:active:not(:disabled) { transform: translateY(0) scale(0.98); }
+}
+
+/* ---------- Responsive ---------- */
+@media (max-width: 1240px) {
+  .tb-text-btn span { display: none; }
+  .tb-text-btn { padding: 0 10px; }
+  .tb-text-btn.cta { padding: 0 12px; }
+}
+@media (max-width: 980px) {
+  .doc-title { max-width: 140px; }
+  .toolbar-section.center .tb-group:nth-child(3) { display: none; }
+}
+@media (max-width: 760px) {
+  .toolbar-section.center .tb-group:nth-child(1) { display: none; }
 }
 </style>

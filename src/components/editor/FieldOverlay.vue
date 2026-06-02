@@ -89,16 +89,6 @@ function runAction(action: 'delete' | 'duplicate' | 'required' | 'lock', e: Even
       <span class="field-handle se" />
     </template>
 
-    <button
-      v-if="isSelected && !isPreview"
-      class="field-close-btn"
-      title="Delete field"
-      @mousedown.stop
-      @click="runAction('delete', $event)"
-    >
-      <v-icon icon="mdi-close" size="12" />
-    </button>
-
     <Transition name="ws-pop">
       <div
         v-if="isSelected && !isPreview"
@@ -156,28 +146,6 @@ function runAction(action: 'delete' | 'duplicate' | 'required' | 'lock', e: Even
   white-space: nowrap;
   text-overflow: ellipsis;
   overflow: hidden;
-}
-
-.field-close-btn {
-  position: absolute;
-  top: -10px;
-  right: -10px;
-  width: 20px;
-  height: 20px;
-  border-radius: 50%;
-  background: rgb(239, 68, 68);
-  color: #fff;
-  border: 2px solid rgb(var(--v-theme-surface));
-  cursor: pointer;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  box-shadow: var(--ws-shadow-md);
-  padding: 0;
-  z-index: 6;
-  transition: transform 0.12s var(--ws-easing-spring), background 0.12s var(--ws-easing);
-  &:hover { background: rgb(220, 38, 38); transform: scale(1.12); }
-  &:active { transform: scale(0.95); }
 }
 
 .field-toolbar {

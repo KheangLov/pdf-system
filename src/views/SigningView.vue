@@ -151,10 +151,10 @@ onMounted(load)
       </div>
 
       <div class="right">
-        <v-btn-toggle density="compact" variant="text" divided rounded="lg">
-          <v-btn icon="mdi-magnify-minus-outline" size="small" @click="zoom = Math.max(0.5, zoom - 0.1)" />
-          <v-btn variant="text" size="small" @click="zoom = 1">{{ Math.round(zoom * 100) }}%</v-btn>
-          <v-btn icon="mdi-magnify-plus-outline" size="small" @click="zoom = Math.min(2.5, zoom + 0.1)" />
+        <v-btn-toggle density="compact" rounded="pill">
+          <v-btn icon="mdi-magnify-minus-outline" size="small" rounded="fill" @click="zoom = Math.max(0.5, zoom - 0.1)" />
+          <v-btn size="small" rounded="fill" @click="zoom = 1">{{ Math.round(zoom * 100) }}%</v-btn>
+          <v-btn icon="mdi-magnify-plus-outline" size="small" rounded="fill" @click="zoom = Math.min(2.5, zoom + 0.1)" />
         </v-btn-toggle>
 
         <v-btn

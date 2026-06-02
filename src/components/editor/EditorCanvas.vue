@@ -18,20 +18,25 @@ const scrollContainer = ref<HTMLElement | null>(null)
 const showGrid = computed(() => ui.preferences.showGrid)
 const isPreview = computed(() => editor.mode === 'preview')
 
-/* Render the grid at the same screen-pixel spacing the snap divisions use,
- * scaled by the current zoom so the lines visually match where snap will
- * land. The page is 1 unit wide / GRID_DIVISIONS = 200 → step in normalized
- * units is 1/200, so on screen that's (pageWidth * zoom) / 200 pixels —
- * but a fine 200-line grid looks like static. Halve the resolution for
- * display so users can actually see and align to it. */
+/* Visible alignment grid. The snap engine uses 200 divisions per page, which
+ * is too dense to actually see; render every 4th line (50 cells per side).
+ * Light minor lines, slightly stronger every 5 cells for easier counting. */
 const gridStyle = computed(() => {
-  const step = 1 / 50 /* visible grid every 4 snap divisions */
+  const minor = 100 / 50  /* % per cell */
+  const major = minor * 5 /* every 5 cells */
   return {
     backgroundImage: `
-      linear-gradient(rgba(99,102,241,0.18) 1px, transparent 1px),
-      linear-gradient(90deg, rgba(99,102,241,0.18) 1px, transparent 1px)
+      linear-gradient(to right, rgba(99,102,241,0.45) 1px, transparent 1px),
+      linear-gradient(to bottom, rgba(99,102,241,0.45) 1px, transparent 1px),
+      linear-gradient(to right, rgba(99,102,241,0.18) 1px, transparent 1px),
+      linear-gradient(to bottom, rgba(99,102,241,0.18) 1px, transparent 1px)
     `,
-    backgroundSize: `${step * 100}% ${step * 100}%`
+    backgroundSize: `
+      ${major}% ${major}%,
+      ${major}% ${major}%,
+      ${minor}% ${minor}%,
+      ${minor}% ${minor}%
+    `
   }
 })
 
@@ -158,15 +163,15 @@ defineExpose({ getPageElement })
   z-index: 2;
 }
 
-/* Sits inside the drop layer (above the PDF canvas, below field overlays) */
+/* Sits inside the drop layer (above the PDF canvas, below field overlays).
+ * No mix-blend-mode — the drop layer creates its own stacking context, so
+ * blends would have nothing to combine with and render invisible. */
 .page-grid {
   position: absolute;
   inset: 0;
   z-index: 0;
   pointer-events: none;
   background-position: 0 0;
-  /* Slight fade so the PDF underneath is still readable */
-  mix-blend-mode: multiply;
 }
 
 .is-preview .page-drop-layer { cursor: default; }

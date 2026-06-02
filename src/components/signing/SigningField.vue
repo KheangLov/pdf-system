@@ -30,6 +30,9 @@ const isFilled = computed(() => {
   return v != null && v !== ''
 })
 
+/* Required + empty = the user still needs to act here. Worth visually shouting. */
+const needsAttention = computed(() => props.field.required && !isFilled.value)
+
 const inputType = computed(() => {
   switch (props.field.type) {
     case 'email': return 'email'
@@ -53,11 +56,23 @@ function autoFill() {
       'is-active': active,
       'is-filled': isFilled,
       'is-required': field.required,
+      'is-needs-attention': needsAttention,
       'is-image': field.type === 'signature' || field.type === 'initial'
     }"
     :style="positionStyle"
     @click="emit('click')"
   >
+    <!-- Required badge — sits above the field, always visible when needed -->
+    <span v-if="needsAttention" class="required-badge">
+      <v-icon icon="mdi-asterisk" size="9" />
+      Required
+    </span>
+
+    <!-- Filled checkmark indicator -->
+    <span v-if="isFilled" class="filled-badge" aria-hidden="true">
+      <v-icon icon="mdi-check" size="11" />
+    </span>
+
     <template v-if="field.type === 'signature' || field.type === 'initial'">
       <img
         v-if="typeof field.value === 'string' && field.value.startsWith('data:image')"
@@ -127,7 +142,8 @@ function autoFill() {
   display: flex;
   align-items: center;
   justify-content: center;
-  overflow: hidden;
+  /* overflow visible so the required badge can extend above the field */
+  overflow: visible;
   font-size: 12px;
   transition: all 0.15s var(--ws-easing);
 
@@ -144,24 +160,78 @@ function autoFill() {
     border-color: rgb(var(--v-theme-success));
     border-style: solid;
   }
-  &.is-required::before {
-    content: '*';
-    position: absolute;
-    top: -6px;
-    right: -6px;
-    width: 12px;
-    height: 12px;
-    border-radius: 50%;
-    background: rgb(var(--v-theme-error));
-    color: #fff;
-    font-size: 9px;
-    font-weight: 700;
-    line-height: 12px;
-    text-align: center;
-    z-index: 2;
-  }
   &.is-image { background: rgba(99, 102, 241, 0.06); }
+
+  /* Required + still empty: red glow + red left accent + pulsing border */
+  &.is-needs-attention {
+    background: rgba(239, 68, 68, 0.08);
+    border-color: rgb(239, 68, 68);
+    box-shadow:
+      inset 4px 0 0 rgb(239, 68, 68),
+      0 0 0 2px rgba(239, 68, 68, 0.20);
+    animation: ws-required-pulse 2.4s ease-in-out infinite;
+  }
+  &.is-needs-attention.is-active {
+    animation: none;
+    box-shadow:
+      inset 4px 0 0 rgb(239, 68, 68),
+      0 0 0 3px rgba(239, 68, 68, 0.35);
+  }
 }
+
+@keyframes ws-required-pulse {
+  0%, 100% {
+    box-shadow:
+      inset 4px 0 0 rgb(239, 68, 68),
+      0 0 0 2px rgba(239, 68, 68, 0.20);
+  }
+  50% {
+    box-shadow:
+      inset 4px 0 0 rgb(239, 68, 68),
+      0 0 0 5px rgba(239, 68, 68, 0.08);
+  }
+}
+
+/* Required pill — sits above the field, white text on red */
+.required-badge {
+  position: absolute;
+  bottom: calc(100% + 4px);
+  left: 0;
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  padding: 2px 7px 2px 5px;
+  background: rgb(239, 68, 68);
+  color: #fff;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  border-radius: 999px;
+  box-shadow: 0 2px 6px rgba(239, 68, 68, 0.35);
+  pointer-events: none;
+  z-index: 4;
+  white-space: nowrap;
+}
+
+/* Filled state — green check at top-right */
+.filled-badge {
+  position: absolute;
+  top: -8px;
+  right: -8px;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: rgb(16, 185, 129);
+  color: #fff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 2px 6px rgba(16, 185, 129, 0.35);
+  pointer-events: none;
+  z-index: 4;
+}
+
 .signing-field-prompt {
   display: inline-flex;
   align-items: center;
@@ -171,6 +241,9 @@ function autoFill() {
   font-size: 11.5px;
   text-transform: uppercase;
   letter-spacing: 0.04em;
+}
+.is-needs-attention .signing-field-prompt {
+  color: rgb(220, 38, 38);
 }
 .signing-field-img {
   max-width: 100%;

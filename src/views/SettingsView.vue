@@ -38,9 +38,10 @@ async function clearAllData() {
           color="primary"
           variant="outlined"
           density="comfortable"
+          rounded="pill"
           @update:model-value="ui.updatePreferences({ theme: $event })"
         >
-          <v-btn v-for="t in themes" :key="t.value" :value="t.value" size="small">{{ t.label }}</v-btn>
+          <v-btn v-for="t in themes" :key="t.value" :value="t.value" size="small" rounded="fill">{{ t.label }}</v-btn>
         </v-btn-toggle>
       </div>
 
@@ -55,10 +56,11 @@ async function clearAllData() {
           color="primary"
           variant="outlined"
           density="comfortable"
+          rounded="pill"
           @update:model-value="ui.updatePreferences({ density: $event })"
         >
-          <v-btn value="comfortable" size="small">Comfortable</v-btn>
-          <v-btn value="compact" size="small">Compact</v-btn>
+          <v-btn value="comfortable" size="small" rounded="fill">Comfortable</v-btn>
+          <v-btn value="compact" size="small" rounded="fill">Compact</v-btn>
         </v-btn-toggle>
       </div>
     </section>

@@ -1,15 +1,9 @@
 import { openDB, type IDBPDatabase } from 'idb'
+import { toRaw } from 'vue'
 import type { SignDocument, SignTemplate, SavedSignature, UIPreferences } from '@/types'
 
 const DB_NAME = 'wing-sign'
 const DB_VERSION = 1
-
-interface WingSignSchema {
-  documents: SignDocument
-  templates: SignTemplate
-  signatures: SavedSignature
-  preferences: UIPreferences & { id: string }
-}
 
 let dbPromise: Promise<IDBPDatabase> | null = null
 
@@ -39,6 +33,50 @@ function getDb() {
   return dbPromise
 }
 
+/* -------------------------------------------------------------------------
+ *  Vue's reactive() wraps nested objects in Proxies. IndexedDB's structured
+ *  clone algorithm chokes on those (the error: "[object Array] could not be
+ *  cloned"). Sanitize every payload here so callers don't have to think
+ *  about it.
+ *
+ *  Strategy: round-trip the JSON-safe metadata through stringify/parse, but
+ *  carry binary fields (ArrayBuffer) and large data URLs through by
+ *  reference — IDB can clone those natively and JSON would either destroy
+ *  the buffer or balloon memory.
+ * ----------------------------------------------------------------------- */
+
+function jsonClone<T>(value: T): T {
+  return JSON.parse(JSON.stringify(value))
+}
+
+function sanitiseDocument(doc: SignDocument): SignDocument {
+  const raw = toRaw(doc)
+  const { pdfData, thumbnail, ...rest } = raw
+  return {
+    ...jsonClone(rest),
+    pdfData,
+    thumbnail
+  } as SignDocument
+}
+
+function sanitiseTemplate(tpl: SignTemplate): SignTemplate {
+  const raw = toRaw(tpl)
+  const { pdfData, thumbnail, ...rest } = raw
+  return {
+    ...jsonClone(rest),
+    pdfData,
+    thumbnail
+  } as SignTemplate
+}
+
+function sanitiseSignature(sig: SavedSignature): SavedSignature {
+  return jsonClone(toRaw(sig))
+}
+
+function sanitisePreferences(prefs: UIPreferences): UIPreferences {
+  return jsonClone(toRaw(prefs))
+}
+
 export const documentsRepo = {
   async list(): Promise<SignDocument[]> {
     const db = await getDb()
@@ -51,7 +89,9 @@ export const documentsRepo = {
   },
   async put(doc: SignDocument): Promise<void> {
     const db = await getDb()
-    await db.put('documents', { ...doc, updatedAt: Date.now() })
+    const clean = sanitiseDocument(doc)
+    clean.updatedAt = Date.now()
+    await db.put('documents', clean)
   },
   async remove(id: string): Promise<void> {
     const db = await getDb()
@@ -71,7 +111,9 @@ export const templatesRepo = {
   },
   async put(tpl: SignTemplate): Promise<void> {
     const db = await getDb()
-    await db.put('templates', { ...tpl, updatedAt: Date.now() })
+    const clean = sanitiseTemplate(tpl)
+    clean.updatedAt = Date.now()
+    await db.put('templates', clean)
   },
   async remove(id: string): Promise<void> {
     const db = await getDb()
@@ -87,7 +129,7 @@ export const signaturesRepo = {
   },
   async put(sig: SavedSignature): Promise<void> {
     const db = await getDb()
-    await db.put('signatures', sig)
+    await db.put('signatures', sanitiseSignature(sig))
   },
   async remove(id: string): Promise<void> {
     const db = await getDb()
@@ -107,6 +149,6 @@ export const preferencesRepo = {
   },
   async put(prefs: UIPreferences): Promise<void> {
     const db = await getDb()
-    await db.put('preferences', { ...prefs, id: PREFS_KEY })
+    await db.put('preferences', { ...sanitisePreferences(prefs), id: PREFS_KEY })
   }
 }

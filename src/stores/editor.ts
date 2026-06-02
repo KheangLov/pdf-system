@@ -8,6 +8,11 @@ import { useDocumentStore } from './document'
 import { useHistoryStore } from './history'
 
 export const useEditorStore = defineStore('editor', () => {
+  /* shallowRef is intentional — the pdfData ArrayBuffer must NOT be wrapped
+   * in a reactive Proxy (it can't be cloned for IndexedDB if it is).
+   * Every mutation below reassigns document.value to a new object reference
+   * so Vue's reactivity fires; mutating document.value.fields in place would
+   * be invisible to consumers. */
   const document = shallowRef<SignDocument | null>(null)
   const selectedIds = ref<Set<string>>(new Set())
   const hoveredId = ref<string | null>(null)
@@ -33,8 +38,13 @@ export const useEditorStore = defineStore('editor', () => {
     selectedFields.value[0] ?? null
   )
 
+  function replaceFields(nextFields: SignField[]) {
+    if (!document.value) return
+    document.value = { ...document.value, fields: nextFields }
+  }
+
   function setDocument(doc: SignDocument | null) {
-    document.value = doc ? cloneDeep(doc) : null
+    document.value = doc ? { ...doc, fields: cloneDeep(doc.fields) } : null
     selectedIds.value = new Set()
     currentPage.value = 1
     if (doc) useHistoryStore().reset(doc.fields)
@@ -60,6 +70,7 @@ export const useEditorStore = defineStore('editor', () => {
   function clearSelection() { selectedIds.value = new Set() }
 
   function addField(type: FieldType, position: FieldPosition): SignField {
+    if (!document.value) throw new Error('No document loaded')
     const meta = FIELD_CATALOG[type]
     const field: SignField = {
       id: uuid(),
@@ -82,27 +93,24 @@ export const useEditorStore = defineStore('editor', () => {
       createdAt: Date.now(),
       updatedAt: Date.now()
     }
-    if (!document.value) throw new Error('No document loaded')
-    document.value.fields = [...document.value.fields, field]
+    replaceFields([...fields.value, field])
     selectField(field.id)
     pushHistory(`Added ${meta.label}`)
     return field
   }
 
   function updateField(id: string, patch: Partial<SignField>) {
-    if (!document.value) return
-    document.value.fields = document.value.fields.map((f) =>
+    replaceFields(fields.value.map((f) =>
       f.id === id ? { ...f, ...patch, updatedAt: Date.now() } : f
-    )
+    ))
   }
 
   function updatePosition(id: string, position: Partial<FieldPosition>) {
-    if (!document.value) return
-    document.value.fields = document.value.fields.map((f) =>
+    replaceFields(fields.value.map((f) =>
       f.id === id
         ? { ...f, position: { ...f.position, ...position }, updatedAt: Date.now() }
         : f
-    )
+    ))
   }
 
   function commitUpdate(label: string) { pushHistory(label) }
@@ -126,7 +134,7 @@ export const useEditorStore = defineStore('editor', () => {
       copies.push(copy)
       newIds.add(copy.id)
     }
-    document.value.fields = [...document.value.fields, ...copies]
+    replaceFields([...fields.value, ...copies])
     selectedIds.value = newIds
     pushHistory(`Duplicated ${copies.length} field(s)`)
   }
@@ -134,9 +142,7 @@ export const useEditorStore = defineStore('editor', () => {
   function deleteSelection() {
     if (!document.value || selectedIds.value.size === 0) return
     const count = selectedIds.value.size
-    document.value.fields = document.value.fields.filter(
-      (f) => !selectedIds.value.has(f.id)
-    )
+    replaceFields(fields.value.filter((f) => !selectedIds.value.has(f.id)))
     clearSelection()
     pushHistory(`Deleted ${count} field(s)`)
   }
@@ -144,18 +150,18 @@ export const useEditorStore = defineStore('editor', () => {
   function toggleRequiredSelection() {
     if (!document.value) return
     const allRequired = selectedFields.value.every((f) => f.required)
-    document.value.fields = document.value.fields.map((f) =>
+    replaceFields(fields.value.map((f) =>
       selectedIds.value.has(f.id) ? { ...f, required: !allRequired } : f
-    )
+    ))
     pushHistory('Toggled required')
   }
 
   function toggleLockSelection() {
     if (!document.value) return
     const allLocked = selectedFields.value.every((f) => f.locked)
-    document.value.fields = document.value.fields.map((f) =>
+    replaceFields(fields.value.map((f) =>
       selectedIds.value.has(f.id) ? { ...f, locked: !allLocked } : f
-    )
+    ))
     pushHistory('Toggled lock')
   }
 
@@ -165,8 +171,7 @@ export const useEditorStore = defineStore('editor', () => {
   }
 
   function restoreFields(snapshot: SignField[]) {
-    if (!document.value) return
-    document.value.fields = cloneDeep(snapshot)
+    replaceFields(cloneDeep(snapshot))
     selectedIds.value = new Set()
   }
 
@@ -174,8 +179,7 @@ export const useEditorStore = defineStore('editor', () => {
     if (!document.value) return
     isSaving.value = true
     try {
-      const snapshot = { ...document.value, fields: cloneDeep(document.value.fields) }
-      await useDocumentStore().save(snapshot)
+      await useDocumentStore().save(document.value)
       lastSavedAt.value = Date.now()
     } finally {
       isSaving.value = false

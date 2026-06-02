@@ -107,11 +107,12 @@ function redo() {
       >Theme</v-btn>
 
       <v-btn
-        variant="text"
+        :variant="editor.mode === 'preview' ? 'tonal' : 'text'"
+        :color="editor.mode === 'preview' ? 'primary' : undefined"
         size="small"
-        prepend-icon="mdi-eye-outline"
+        :prepend-icon="editor.mode === 'preview' ? 'mdi-eye' : 'mdi-eye-outline'"
         @click="emit('preview')"
-      >Preview</v-btn>
+      >{{ editor.mode === 'preview' ? 'Previewing' : 'Preview' }}</v-btn>
 
       <v-btn
         variant="text"

@@ -1,12 +1,19 @@
 <script setup lang="ts">
-import { ref, computed } from 'vue'
+import { ref, computed, inject, type ShallowRef } from 'vue'
 import { FIELD_CATALOG, FIELD_TYPES } from '@/constants/fields'
 import { useEditorStore } from '@/stores'
+import PageThumbnail from '@/components/pdf/PageThumbnail.vue'
 import type { FieldType } from '@/types'
 
 const editor = useEditorStore()
 const search = ref('')
 const activeTab = ref<'fields' | 'pages'>('fields')
+
+const pdfDoc = inject<ShallowRef<import('pdfjs-dist').PDFDocumentProxy | null>>(
+  'pdfDoc',
+  /* fallback for safety — render nothing if EditorView didn't provide */
+  ref(null) as unknown as ShallowRef<import('pdfjs-dist').PDFDocumentProxy | null>
+)
 
 const filteredTypes = computed(() => {
   if (!search.value.trim()) return FIELD_TYPES
@@ -18,7 +25,10 @@ const filteredTypes = computed(() => {
 })
 
 const pages = computed(() => editor.document?.pages ?? [])
-const thumbnails = computed(() => editor.document?.thumbnail ?? '')
+
+function fieldsOnPage(pageIndex: number): number {
+  return editor.fields.filter((f) => f.position.page === pageIndex).length
+}
 
 function onDragStart(e: DragEvent, type: FieldType) {
   if (!e.dataTransfer) return
@@ -51,6 +61,7 @@ function scrollToPage(idx: number) {
       >
         <v-icon icon="mdi-file-document-outline" size="16" />
         Pages
+        <span v-if="pages.length" class="tab-badge">{{ pages.length }}</span>
       </button>
     </div>
 
@@ -105,10 +116,20 @@ function scrollToPage(idx: number) {
           @click="scrollToPage(page.index)"
         >
           <div class="page-tile-thumb">
-            <img v-if="page.index === 1 && thumbnails" :src="thumbnails" alt="" />
-            <span v-else class="page-tile-placeholder">{{ page.index }}</span>
+            <PageThumbnail
+              :pdf="pdfDoc"
+              :page-index="page.index"
+              :max-width="120"
+            />
+            <span class="page-tile-number">{{ page.index }}</span>
           </div>
-          <span class="page-tile-label">Page {{ page.index }}</span>
+          <div class="page-tile-meta">
+            <span class="page-tile-label">Page {{ page.index }}</span>
+            <span v-if="fieldsOnPage(page.index)" class="page-tile-fields">
+              <v-icon icon="mdi-vector-square" size="11" />
+              {{ fieldsOnPage(page.index) }}
+            </span>
+          </div>
         </button>
       </div>
     </div>
@@ -150,6 +171,19 @@ function scrollToPage(idx: number) {
     color: rgb(var(--v-theme-primary));
     border-bottom-color: rgb(var(--v-theme-primary));
   }
+}
+.tab-badge {
+  font-size: 10px;
+  font-weight: 700;
+  padding: 1px 6px;
+  border-radius: 999px;
+  background: rgb(var(--v-theme-surface-variant));
+  color: rgb(var(--v-theme-on-surface-variant));
+  line-height: 1.4;
+}
+.tab.active .tab-badge {
+  background: rgba(99, 102, 241, 0.15);
+  color: rgb(var(--v-theme-primary));
 }
 
 .sidebar-body {
@@ -213,46 +247,78 @@ function scrollToPage(idx: number) {
 .pages-list {
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 10px;
 }
 .page-tile {
   display: flex;
-  align-items: center;
-  gap: 10px;
-  padding: 8px;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 8px;
+  padding: 10px;
   background: rgb(var(--v-theme-surface));
   border: 1px solid rgb(var(--v-theme-border));
-  border-radius: 10px;
+  border-radius: 12px;
   cursor: pointer;
-  transition: all 0.15s var(--ws-easing);
-  &:hover { border-color: rgb(var(--v-theme-primary)); }
+  transition: all 0.18s var(--ws-easing);
+  text-align: left;
+  &:hover {
+    border-color: rgb(var(--v-theme-primary));
+    transform: translateY(-1px);
+    box-shadow: var(--ws-shadow-sm);
+  }
   &.active {
     border-color: rgb(var(--v-theme-primary));
-    background: rgba(99,102,241,0.06);
+    background: rgba(99, 102, 241, 0.05);
+    box-shadow: 0 0 0 2px rgba(99, 102, 241, 0.18);
   }
 }
 .page-tile-thumb {
-  width: 48px;
-  height: 60px;
+  position: relative;
+  width: 100%;
+  aspect-ratio: 8.5 / 11;
   background: rgb(var(--v-theme-surface-variant));
-  border-radius: 4px;
+  border-radius: 6px;
   overflow: hidden;
+  box-shadow: var(--ws-shadow-sm);
+}
+.page-tile-number {
+  position: absolute;
+  top: 6px;
+  left: 6px;
+  background: rgba(15, 23, 42, 0.78);
+  color: #fff;
+  font-size: 10px;
+  font-weight: 700;
+  padding: 2px 6px;
+  border-radius: 4px;
+  backdrop-filter: blur(4px);
+  letter-spacing: 0.02em;
+}
+.page-tile-meta {
   display: flex;
   align-items: center;
-  justify-content: center;
-  img { width: 100%; height: 100%; object-fit: cover; }
-}
-.page-tile-placeholder {
-  font-size: 11px;
-  color: rgb(var(--v-theme-on-surface-variant));
+  justify-content: space-between;
+  gap: 8px;
 }
 .page-tile-label {
-  font-size: 13px;
-  font-weight: 500;
+  font-size: 12.5px;
+  font-weight: 600;
+  color: rgb(var(--v-theme-on-surface));
+}
+.page-tile-fields {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  font-size: 11px;
+  font-weight: 600;
+  color: rgb(var(--v-theme-primary));
+  background: rgba(99, 102, 241, 0.10);
+  padding: 2px 6px;
+  border-radius: 4px;
 }
 
 @media (max-width: 900px) {
-  .editor-sidebar { width: 220px; }
+  .editor-sidebar { width: 240px; }
   .field-grid { grid-template-columns: 1fr; }
 }
 </style>

@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, onMounted, onBeforeUnmount, watch, shallowRef } from 'vue'
+import { ref, onMounted, onBeforeUnmount, watch, shallowRef, provide } from 'vue'
 import { useRoute, useRouter, onBeforeRouteLeave } from 'vue-router'
 import { useEventListener } from '@vueuse/core'
 import EditorToolbar from '@/components/editor/EditorToolbar.vue'
@@ -21,6 +21,8 @@ const ui = useUIStore()
 const pdfDoc = shallowRef<import('pdfjs-dist').PDFDocumentProxy | null>(null)
 const isLoading = ref(true)
 const templateDialog = ref(false)
+
+provide('pdfDoc', pdfDoc)
 
 async function loadDocument() {
   isLoading.value = true

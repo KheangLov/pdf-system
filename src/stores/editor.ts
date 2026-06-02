@@ -58,6 +58,13 @@ export const useEditorStore = defineStore('editor', () => {
   function resetZoom() { setZoom(1) }
 
   function selectField(id: string, additive = false) {
+    /* Release any active text input so the next keyboard Delete targets the
+     * field rather than the input character. (Use window.document explicitly
+     * — `document` is shadowed by the local shallowRef above.) */
+    const focused = window.document?.activeElement as HTMLElement | null
+    if (focused && (focused.tagName === 'INPUT' || focused.tagName === 'TEXTAREA' || focused.isContentEditable)) {
+      focused.blur()
+    }
     if (additive) {
       const next = new Set(selectedIds.value)
       next.has(id) ? next.delete(id) : next.add(id)

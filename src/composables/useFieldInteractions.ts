@@ -10,10 +10,12 @@ interface Options {
   pageHeight: Ref<number>
 }
 
-/* Number of snap divisions across a page. 200 ≈ a ~3px grid on a standard
- * A4 page rendered at 100% zoom, fine enough to feel smooth but coarse
- * enough to obviously line fields up. */
+/* Page is divided into 200 snap divisions — coarse enough to feel deliberate
+ * (~3px on a typical A4 render at 1× zoom), fine enough to align cleanly. */
 const GRID_DIVISIONS = 200
+
+/* Don't kick off a drag for tiny accidental movements after click. */
+const DRAG_THRESHOLD_PX = 3
 
 export function useFieldInteractions(target: Ref<HTMLElement | null>, opts: Options) {
   const editor = useEditorStore()
@@ -21,35 +23,70 @@ export function useFieldInteractions(target: Ref<HTMLElement | null>, opts: Opti
 
   const clamp = (v: number, min: number, max: number) => Math.max(min, Math.min(max, v))
   const snap = (v: number) => Math.round(v * GRID_DIVISIONS) / GRID_DIVISIONS
-  const maybeSnap = (v: number) => ui.preferences.snapToGrid ? snap(v) : v
 
   function setup() {
     const el = target.value
     if (!el) return
-    if (editor.mode === 'preview') return /* disable interactions in preview */
+    if (editor.mode === 'preview') return
     const interactable = interact(el)
+
+    /* Running pixel delta for the active drag — accumulated locally so the
+     * field follows the cursor at native pointer speed, then converted to
+     * normalised page-relative deltas and committed via moveSelection.
+     * On end, optionally snap-align everything in the selection. */
+    let accumDxPx = 0
+    let accumDyPx = 0
+    let dragging = false
 
     interactable
       .draggable({
         inertia: false,
-        modifiers: [interact.modifiers.restrictRect({ restriction: 'parent' })],
+        autoScroll: true,
+        modifiers: [
+          /* Manual clamping in moveSelection — interact's restrictRect uses
+           * pixel rects which fights the multi-field group translate. */
+        ],
         listeners: {
-          start: () => {
+          start: (event) => {
             if (opts.field.locked || editor.mode === 'preview') return false
-            if (!editor.selectedIds.has(opts.field.id)) editor.selectField(opts.field.id)
+            accumDxPx = 0
+            accumDyPx = 0
+            dragging = false
+            event.target.classList.add('is-pre-drag')
           },
           move: (event) => {
             if (opts.field.locked || editor.mode === 'preview') return
+            accumDxPx += event.dx
+            accumDyPx += event.dy
+
+            /* Apply threshold once, then promote to a real drag and select. */
+            if (!dragging) {
+              if (Math.hypot(accumDxPx, accumDyPx) < DRAG_THRESHOLD_PX) return
+              dragging = true
+              if (!editor.selectedIds.has(opts.field.id)) {
+                editor.selectField(opts.field.id)
+              }
+              editor.draggingId = opts.field.id
+              event.target.classList.remove('is-pre-drag')
+              event.target.classList.add('is-dragging')
+            }
+
             const dx = event.dx / opts.pageWidth.value
             const dy = event.dy / opts.pageHeight.value
-            const f = editor.fields.find((x) => x.id === opts.field.id)
-            if (!f) return
-            editor.updatePosition(opts.field.id, {
-              x: clamp(maybeSnap(f.position.x + dx), 0, 1 - f.position.width),
-              y: clamp(maybeSnap(f.position.y + dy), 0, 1 - f.position.height)
-            })
+            editor.moveSelection(opts.field.id, dx, dy)
           },
-          end: () => editor.commitUpdate('Moved field')
+          end: (event) => {
+            event.target.classList.remove('is-pre-drag', 'is-dragging')
+            if (!dragging) return /* never moved past threshold — treat as click */
+            editor.draggingId = null
+
+            /* Snap-on-release: align every selected field to the grid in a
+             * single atomic update so they don't drift apart. */
+            if (ui.preferences.snapToGrid) {
+              snapSelectionToGrid()
+            }
+            editor.commitUpdate('Moved field')
+          }
         }
       })
       .resizable({
@@ -59,6 +96,9 @@ export function useFieldInteractions(target: Ref<HTMLElement | null>, opts: Opti
           interact.modifiers.restrictSize({ min: { width: 24, height: 16 } })
         ],
         listeners: {
+          start: (event) => {
+            event.target.classList.add('is-dragging')
+          },
           move: (event) => {
             if (opts.field.locked || editor.mode === 'preview') return
             const f = editor.fields.find((x) => x.id === opts.field.id)
@@ -68,15 +108,34 @@ export function useFieldInteractions(target: Ref<HTMLElement | null>, opts: Opti
             const newX = f.position.x + event.deltaRect.left / opts.pageWidth.value
             const newY = f.position.y + event.deltaRect.top / opts.pageHeight.value
             editor.updatePosition(opts.field.id, {
-              x: clamp(maybeSnap(newX), 0, 1 - newW),
-              y: clamp(maybeSnap(newY), 0, 1 - newH),
-              width: clamp(maybeSnap(newW), 0.01, 1),
-              height: clamp(maybeSnap(newH), 0.01, 1)
+              x: clamp(newX, 0, 1 - newW),
+              y: clamp(newY, 0, 1 - newH),
+              width: clamp(newW, 0.01, 1),
+              height: clamp(newH, 0.01, 1)
             })
           },
-          end: () => editor.commitUpdate('Resized field')
+          end: (event) => {
+            event.target.classList.remove('is-dragging')
+            if (ui.preferences.snapToGrid) snapSelectionToGrid()
+            editor.commitUpdate('Resized field')
+          }
         }
       })
+  }
+
+  function snapSelectionToGrid() {
+    const ids = editor.selectedIds.has(opts.field.id)
+      ? new Set(editor.selectedIds)
+      : new Set([opts.field.id])
+    for (const f of editor.fields) {
+      if (!ids.has(f.id)) continue
+      editor.updatePosition(f.id, {
+        x: snap(f.position.x),
+        y: snap(f.position.y),
+        width: snap(f.position.width),
+        height: snap(f.position.height)
+      })
+    }
   }
 
   function tearDown() {

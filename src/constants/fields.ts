@@ -10,15 +10,6 @@ export const FIELD_CATALOG: Record<FieldType, FieldDescriptor> = {
     defaultHeight: 0.06,
     color: '#6366f1'
   },
-  initial: {
-    type: 'initial',
-    label: 'Initial',
-    icon: 'mdi-alpha-i-circle',
-    description: 'Short initials',
-    defaultWidth: 0.08,
-    defaultHeight: 0.05,
-    color: '#8b5cf6'
-  },
   text: {
     type: 'text',
     label: 'Text',
@@ -108,12 +99,22 @@ export const FIELD_CATALOG: Record<FieldType, FieldDescriptor> = {
     defaultWidth: 0.18,
     defaultHeight: 0.035,
     color: '#f59e0b'
+  },
+  api: {
+    type: 'api',
+    label: 'API Field',
+    icon: 'mdi-api',
+    description: 'Auto-fill value from an API endpoint',
+    defaultWidth: 0.24,
+    defaultHeight: 0.04,
+    color: '#14b8a6'
   }
 }
 
 export const FIELD_TYPES: FieldType[] = [
-  'signature', 'initial', 'text', 'multiline', 'checkbox',
-  'selection', 'date', 'name', 'email', 'phone', 'company', 'title'
+  'signature', 'text', 'multiline', 'checkbox',
+  'selection', 'date', 'name', 'email', 'phone',
+  'company', 'title', 'api'
 ]
 
 export const SIGNATURE_FONTS = [

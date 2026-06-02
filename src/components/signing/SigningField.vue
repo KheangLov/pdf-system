@@ -1,7 +1,8 @@
 <script setup lang="ts">
-import { computed } from 'vue'
+import { computed, ref, watch, onMounted } from 'vue'
 import type { SignField } from '@/types'
 import { FIELD_CATALOG } from '@/constants/fields'
+import { fetchApiValue } from '@/services/api/fetcher'
 import dayjs from 'dayjs'
 
 const props = defineProps<{
@@ -30,7 +31,6 @@ const isFilled = computed(() => {
   return v != null && v !== ''
 })
 
-/* Required + empty = the user still needs to act here. Worth visually shouting. */
 const needsAttention = computed(() => props.field.required && !isFilled.value)
 
 const inputType = computed(() => {
@@ -40,6 +40,34 @@ const inputType = computed(() => {
     case 'date': return 'date'
     default: return 'text'
   }
+})
+
+/* ------------------------------------------------------------------ API field */
+const apiState = ref<'idle' | 'loading' | 'success' | 'error' | 'default'>('idle')
+const apiError = ref<string | null>(null)
+
+async function refreshApiValue() {
+  if (props.field.type !== 'api' || !props.field.apiBinding?.url) return
+  apiState.value = 'loading'
+  apiError.value = null
+  const result = await fetchApiValue(props.field.apiBinding)
+  /* Only overwrite an existing value if the signer hasn't edited it. */
+  if (props.field.value == null || props.field.value === '' || props.field.value === props.field.apiBinding.defaultValue) {
+    emit('update', result.value)
+  }
+  if (result.error) {
+    apiState.value = 'error'
+    apiError.value = result.error
+  } else {
+    apiState.value = result.source === 'default' ? 'default' : 'success'
+  }
+}
+
+onMounted(() => {
+  if (props.field.type === 'api') refreshApiValue()
+})
+watch(() => props.field.apiBinding?.url, () => {
+  if (props.field.type === 'api') refreshApiValue()
 })
 
 function autoFill() {
@@ -57,23 +85,22 @@ function autoFill() {
       'is-filled': isFilled,
       'is-required': field.required,
       'is-needs-attention': needsAttention,
-      'is-image': field.type === 'signature' || field.type === 'initial'
+      'is-image': field.type === 'signature',
+      'is-api': field.type === 'api'
     }"
     :style="positionStyle"
     @click="emit('click')"
   >
-    <!-- Required badge — sits above the field, always visible when needed -->
     <span v-if="needsAttention" class="required-badge">
       <v-icon icon="mdi-asterisk" size="9" />
       Required
     </span>
 
-    <!-- Filled checkmark indicator -->
     <span v-if="isFilled" class="filled-badge" aria-hidden="true">
       <v-icon icon="mdi-check" size="11" />
     </span>
 
-    <template v-if="field.type === 'signature' || field.type === 'initial'">
+    <template v-if="field.type === 'signature'">
       <img
         v-if="typeof field.value === 'string' && field.value.startsWith('data:image')"
         :src="field.value"
@@ -118,6 +145,37 @@ function autoFill() {
       />
     </template>
 
+    <template v-else-if="field.type === 'api'">
+      <div v-if="apiState === 'loading'" class="api-loading">
+        <v-icon icon="mdi-loading mdi-spin" size="14" />
+        <span>Loading…</span>
+      </div>
+      <input
+        v-else
+        type="text"
+        class="signing-input api-input"
+        :placeholder="field.placeholder ?? 'Auto-filled from API'"
+        :value="(field.value as string) ?? ''"
+        @click.stop
+        @input="emit('update', ($event.target as HTMLInputElement).value)"
+      />
+      <span
+        v-if="apiState === 'success' || apiState === 'error' || apiState === 'default'"
+        class="api-state-chip"
+        :class="apiState"
+        :title="apiError ?? ''"
+      >
+        <v-icon
+          :icon="apiState === 'success' ? 'mdi-api' : apiState === 'default' ? 'mdi-cloud-off-outline' : 'mdi-alert-circle-outline'"
+          size="10"
+        />
+        <span>{{ apiState === 'success' ? 'API' : apiState === 'default' ? 'Default' : 'Error' }}</span>
+        <button v-if="!field.locked" class="api-refresh" title="Refresh" @click.stop="refreshApiValue">
+          <v-icon icon="mdi-refresh" size="10" />
+        </button>
+      </span>
+    </template>
+
     <template v-else>
       <input
         :type="inputType"
@@ -142,7 +200,6 @@ function autoFill() {
   display: flex;
   align-items: center;
   justify-content: center;
-  /* overflow visible so the required badge can extend above the field */
   overflow: visible;
   font-size: 12px;
   transition: all 0.15s var(--ws-easing);
@@ -161,8 +218,12 @@ function autoFill() {
     border-style: solid;
   }
   &.is-image { background: rgba(99, 102, 241, 0.06); }
+  &.is-api {
+    background: rgba(20, 184, 166, 0.08);
+    border-color: rgba(20, 184, 166, 0.55);
+  }
+  &.is-api.is-filled { background: rgba(20, 184, 166, 0.10); border-color: rgb(20, 184, 166); }
 
-  /* Required + still empty: red glow + red left accent + pulsing border */
   &.is-needs-attention {
     background: rgba(239, 68, 68, 0.08);
     border-color: rgb(239, 68, 68);
@@ -192,7 +253,6 @@ function autoFill() {
   }
 }
 
-/* Required pill — sits above the field, white text on red */
 .required-badge {
   position: absolute;
   bottom: calc(100% + 4px);
@@ -214,7 +274,6 @@ function autoFill() {
   white-space: nowrap;
 }
 
-/* Filled state — green check at top-right */
 .filled-badge {
   position: absolute;
   top: -8px;
@@ -242,14 +301,9 @@ function autoFill() {
   text-transform: uppercase;
   letter-spacing: 0.04em;
 }
-.is-needs-attention .signing-field-prompt {
-  color: rgb(220, 38, 38);
-}
-.signing-field-img {
-  max-width: 100%;
-  max-height: 100%;
-  object-fit: contain;
-}
+.is-needs-attention .signing-field-prompt { color: rgb(220, 38, 38); }
+.signing-field-img { max-width: 100%; max-height: 100%; object-fit: contain; }
+
 .signing-input {
   width: 100%;
   height: 100%;
@@ -269,5 +323,52 @@ function autoFill() {
   align-items: center;
   justify-content: center;
   input { width: 70%; height: 70%; accent-color: rgb(var(--v-theme-primary)); cursor: pointer; }
+}
+
+/* ------------------------------------------------------ API field bits */
+.api-loading {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 11px;
+  color: rgb(20, 184, 166);
+  font-weight: 500;
+}
+.api-input { font-weight: 500; }
+.api-state-chip {
+  position: absolute;
+  top: -10px;
+  right: 6px;
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  padding: 1px 5px 1px 4px;
+  border-radius: 999px;
+  font-size: 9.5px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  background: rgb(20, 184, 166);
+  color: #fff;
+  box-shadow: 0 1px 3px rgba(20, 184, 166, 0.4);
+  z-index: 4;
+
+  &.error { background: rgb(239, 68, 68); box-shadow: 0 1px 3px rgba(239, 68, 68, 0.4); }
+  &.default { background: rgb(148, 163, 184); box-shadow: 0 1px 3px rgba(148, 163, 184, 0.4); }
+}
+.api-refresh {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(255,255,255,0.18);
+  border: 0;
+  border-radius: 999px;
+  width: 14px;
+  height: 14px;
+  margin-left: 2px;
+  padding: 0;
+  color: inherit;
+  cursor: pointer;
+  &:hover { background: rgba(255,255,255,0.32); }
 }
 </style>

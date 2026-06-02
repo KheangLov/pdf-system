@@ -7,7 +7,6 @@ import type { SavedSignature } from '@/types'
 
 const props = defineProps<{
   modelValue: boolean
-  mode?: 'signature' | 'initial'
   defaultText?: string
 }>()
 const emit = defineEmits<{
@@ -29,8 +28,7 @@ const penColor = ref('#0f172a')
 
 const typeCanvas = ref<HTMLCanvasElement | null>(null)
 
-const isInitial = computed(() => props.mode === 'initial')
-const savedList = computed(() => isInitial.value ? sigStore.initials : sigStore.signatures)
+const savedList = computed(() => sigStore.signatures)
 
 watch(() => props.modelValue, (open) => {
   if (open) {
@@ -60,8 +58,7 @@ function renderTypedSignature() {
   ctx.fillStyle = penColor.value
   ctx.textBaseline = 'middle'
   ctx.textAlign = 'center'
-  const fontSize = isInitial.value ? 72 : 64
-  ctx.font = `${fontSize}px ${typedFont.value}`
+  ctx.font = `64px ${typedFont.value}`
   ctx.fillText(typedText.value, w / 2, h / 2)
 }
 
@@ -81,7 +78,7 @@ function handleUpload(e: Event) {
 
 async function adopt() {
   let dataUrl: string | null = null
-  let name = isInitial.value ? 'Initials' : 'Signature'
+  let name = 'Signature'
   let type: SavedSignature['type'] = 'draw'
 
   if (tab.value === 'draw') {
@@ -105,7 +102,7 @@ async function adopt() {
 
   if (saveAsDefault.value && tab.value !== 'saved') {
     await sigStore.save({
-      name: isInitial.value ? `Initials: ${name}` : name,
+      name,
       type,
       dataUrl,
       width: img.width,
@@ -145,7 +142,7 @@ function close() { emit('update:modelValue', false) }
     <v-card class="signature-modal">
       <div class="modal-header">
         <div>
-          <h2 class="modal-title">{{ isInitial ? 'Adopt initials' : 'Adopt your signature' }}</h2>
+          <h2 class="modal-title">Adopt your signature</h2>
           <p class="modal-sub">Saved locally on this device. Never sent anywhere.</p>
         </div>
         <v-btn icon="mdi-close" variant="text" @click="close" />
@@ -169,7 +166,7 @@ function close() { emit('update:modelValue', false) }
           <v-window-item value="saved">
             <div v-if="savedList.length === 0" class="empty-state">
               <v-icon icon="mdi-bookmark-off-outline" size="40" class="mb-2" />
-              <p>No saved {{ isInitial ? 'initials' : 'signatures' }} yet.</p>
+              <p>No saved signatures yet.</p>
             </div>
             <div v-else class="saved-grid">
               <button
@@ -217,8 +214,8 @@ function close() { emit('update:modelValue', false) }
           <v-window-item value="type">
             <v-text-field
               v-model="typedText"
-              :label="isInitial ? 'Your initials' : 'Your full name'"
-              :maxlength="isInitial ? 4 : 40"
+              label="Your full name"
+              :maxlength="40"
               autofocus
               class="mb-3"
             />
@@ -231,7 +228,7 @@ function close() { emit('update:modelValue', false) }
                 :style="{ fontFamily: f.value }"
                 @click="typedFont = f.value"
               >
-                {{ typedText || (isInitial ? 'AB' : 'Your name') }}
+                {{ typedText || 'Your name' }}
               </button>
             </div>
             <div class="type-preview">

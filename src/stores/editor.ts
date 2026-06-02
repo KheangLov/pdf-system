@@ -16,6 +16,7 @@ export const useEditorStore = defineStore('editor', () => {
   const document = shallowRef<SignDocument | null>(null)
   const selectedIds = ref<Set<string>>(new Set())
   const hoveredId = ref<string | null>(null)
+  const draggingId = ref<string | null>(null)
   const zoom = ref(1)
   const currentPage = ref(1)
   const isSaving = ref(false)
@@ -98,7 +99,10 @@ export const useEditorStore = defineStore('editor', () => {
         radius: 4
       },
       createdAt: Date.now(),
-      updatedAt: Date.now()
+      updatedAt: Date.now(),
+      ...(type === 'api' && {
+        apiBinding: { url: '', method: 'GET' as const, cacheSeconds: 60 }
+      })
     }
     replaceFields([...fields.value, field])
     selectField(field.id)
@@ -118,6 +122,32 @@ export const useEditorStore = defineStore('editor', () => {
         ? { ...f, position: { ...f.position, ...position }, updatedAt: Date.now() }
         : f
     ))
+  }
+
+  /* Atomic group translate — move every selected field by (dx, dy) in
+   * normalised page-relative units. Used by group drag and arrow nudge so
+   * the whole selection moves in a single reactive update. The leader id
+   * lets the caller include a field that isn't selected yet (drag-from-deselect
+   * gracefully promotes to a single-field move). Movement is clamped per
+   * field so any one of them hitting the edge doesn't stall the rest. */
+  function moveSelection(leaderId: string, dx: number, dy: number) {
+    if (!document.value) return
+    const ids = selectedIds.value.has(leaderId)
+      ? new Set(selectedIds.value)
+      : new Set([leaderId])
+    if (!ids.size) return
+    replaceFields(fields.value.map((f) => {
+      if (!ids.has(f.id)) return f
+      const newX = Math.max(0, Math.min(1 - f.position.width, f.position.x + dx))
+      const newY = Math.max(0, Math.min(1 - f.position.height, f.position.y + dy))
+      return { ...f, position: { ...f.position, x: newX, y: newY }, updatedAt: Date.now() }
+    }))
+  }
+
+  function nudgeSelection(dx: number, dy: number) {
+    if (selectedIds.value.size === 0) return
+    moveSelection([...selectedIds.value][0], dx, dy)
+    pushHistory('Nudged field')
   }
 
   function commitUpdate(label: string) { pushHistory(label) }
@@ -204,10 +234,10 @@ export const useEditorStore = defineStore('editor', () => {
 
   return {
     document, fields, fieldsByPage, selectedIds, selectedFields, primarySelection,
-    hoveredId, zoom, currentPage, isSaving, lastSavedAt, mode,
+    hoveredId, draggingId, zoom, currentPage, isSaving, lastSavedAt, mode,
     setDocument, setZoom, zoomIn, zoomOut, resetZoom,
     selectField, selectMany, clearSelection,
-    addField, updateField, updatePosition, commitUpdate,
+    addField, updateField, updatePosition, moveSelection, nudgeSelection, commitUpdate,
     duplicateSelection, deleteSelection, toggleRequiredSelection, toggleLockSelection,
     restoreFields, persist, reset
   }

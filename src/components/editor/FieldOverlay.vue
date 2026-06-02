@@ -211,4 +211,26 @@ function runAction(action: 'delete' | 'duplicate' | 'required' | 'lock', e: Even
   opacity: 0.85;
   &:hover { box-shadow: none !important; }
 }
+
+/* Cursor states: grab on hover, grabbing during active drag. */
+.field-overlay:not(.is-locked):not(.is-preview) { cursor: grab; }
+.field-overlay.is-dragging {
+  cursor: grabbing !important;
+  /* Pop the dragged field above siblings + soft elevation while moving */
+  z-index: 8;
+  box-shadow:
+    0 0 0 2px rgba(99, 102, 241, 0.55),
+    0 8px 24px rgba(15, 23, 42, 0.18) !important;
+  transition: box-shadow 0.12s var(--ws-easing);
+  /* Disable text selection while moving */
+  user-select: none;
+}
+.field-overlay.is-dragging .field-label { opacity: 0.85; }
+.field-overlay.is-dragging .field-toolbar {
+  /* Hide the toolbar while moving so it doesn't visually trail */
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.1s var(--ws-easing);
+}
+.field-overlay.is-pre-drag { cursor: grabbing; }
 </style>

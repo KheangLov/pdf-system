@@ -62,6 +62,16 @@ useAutoSave(() => editor.document?.fields, async () => {
   }
 })
 
+/* Convert N pixels into normalised page-relative units. Falls back to a
+ * typical A4 width (~612pt) when no document is loaded so the math is safe
+ * even before the first render. */
+function nudgeStep(px: number): { dx: number; dy: number } {
+  const page = editor.document?.pages[0]
+  const w = page?.width ?? 612
+  const h = page?.height ?? 792
+  return { dx: px / w, dy: px / h }
+}
+
 useEventListener('keydown', (e: KeyboardEvent) => {
   const target = e.target as HTMLElement
   if (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable) return
@@ -81,6 +91,14 @@ useEventListener('keydown', (e: KeyboardEvent) => {
   } else if (cmd && e.key === '+') { e.preventDefault(); editor.zoomIn() }
   else if (cmd && e.key === '-') { e.preventDefault(); editor.zoomOut() }
   else if (cmd && e.key === '0') { e.preventDefault(); editor.resetZoom() }
+  else if (e.key === 'ArrowLeft' || e.key === 'ArrowRight' || e.key === 'ArrowUp' || e.key === 'ArrowDown') {
+    if (editor.selectedIds.size === 0) return
+    e.preventDefault()
+    const step = nudgeStep(e.shiftKey ? 10 : 1)
+    const dx = e.key === 'ArrowLeft' ? -step.dx : e.key === 'ArrowRight' ? step.dx : 0
+    const dy = e.key === 'ArrowUp' ? -step.dy : e.key === 'ArrowDown' ? step.dy : 0
+    editor.nudgeSelection(dx, dy)
+  }
 })
 
 watch(() => route.params.id, () => loadDocument())

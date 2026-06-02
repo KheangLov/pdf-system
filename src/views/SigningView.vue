@@ -22,7 +22,6 @@ const isLoading = ref(true)
 const zoom = ref(1)
 const activeFieldId = ref<string | null>(null)
 const sigModalOpen = ref(false)
-const sigModalMode = ref<'signature' | 'initial'>('signature')
 
 const completedCount = computed(() =>
   document.value?.fields.filter((f) => {
@@ -75,8 +74,7 @@ async function load() {
 
 function onFieldClick(field: SignField) {
   activeFieldId.value = field.id
-  if (field.type === 'signature') { sigModalMode.value = 'signature'; sigModalOpen.value = true }
-  else if (field.type === 'initial') { sigModalMode.value = 'initial'; sigModalOpen.value = true }
+  if (field.type === 'signature') sigModalOpen.value = true
 }
 
 function updateField(id: string, value: string | boolean | null) {
@@ -209,7 +207,6 @@ onMounted(load)
 
     <SignatureModal
       v-model="sigModalOpen"
-      :mode="sigModalMode"
       @select="onSignaturePicked"
     />
   </div>

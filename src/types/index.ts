@@ -2,7 +2,6 @@ export type UUID = string
 
 export type FieldType =
   | 'signature'
-  | 'initial'
   | 'text'
   | 'multiline'
   | 'checkbox'
@@ -13,6 +12,7 @@ export type FieldType =
   | 'phone'
   | 'company'
   | 'title'
+  | 'api'
 
 export interface FieldStyle {
   fontFamily?: string
@@ -34,6 +34,19 @@ export interface FieldValidation {
   min?: number
   max?: number
   message?: string
+}
+
+export interface ApiBinding {
+  url: string
+  method?: 'GET' | 'POST'
+  /** Dot-notation path into the JSON response, e.g. "data.user.email" or "items[0].name". Empty = use raw response. */
+  jsonPath?: string
+  /** Headers serialised as key/value pairs. */
+  headers?: Record<string, string>
+  /** Used if the request fails or returns null. */
+  defaultValue?: string
+  /** Cache TTL in seconds. Same URL+path within the window reuses the result. */
+  cacheSeconds?: number
 }
 
 /** Normalised position — page-relative (0..1) so it stays consistent across zoom levels. */
@@ -58,6 +71,7 @@ export interface SignField {
   value?: string | boolean | null
   style?: FieldStyle
   validation?: FieldValidation
+  apiBinding?: ApiBinding
   createdAt: number
   updatedAt: number
 }

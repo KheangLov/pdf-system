@@ -7,12 +7,6 @@ import { useSignatureStore, useUIStore } from '@/stores'
 const sigs = useSignatureStore()
 const ui = useUIStore()
 const modalOpen = ref(false)
-const modalMode = ref<'signature' | 'initial'>('signature')
-
-function openModal(mode: 'signature' | 'initial') {
-  modalMode.value = mode
-  modalOpen.value = true
-}
 
 function onSelected() {
   ui.pushToast('Signature saved', 'success')
@@ -24,11 +18,10 @@ function onSelected() {
     <div class="head-row">
       <div>
         <h1 class="page-title">My signatures</h1>
-        <p class="page-sub">Signatures and initials are saved locally to your browser</p>
+        <p class="page-sub">Signatures are saved locally to your browser</p>
       </div>
       <div class="head-actions">
-        <v-btn variant="tonal" prepend-icon="mdi-alpha-i-circle" @click="openModal('initial')">New initials</v-btn>
-        <v-btn color="primary" variant="flat" prepend-icon="mdi-draw-pen" @click="openModal('signature')">New signature</v-btn>
+        <v-btn color="primary" variant="flat" prepend-icon="mdi-draw-pen" @click="modalOpen = true">New signature</v-btn>
       </div>
     </div>
 
@@ -64,27 +57,7 @@ function onSelected() {
       </div>
     </section>
 
-    <section class="block">
-      <h2 class="block-title">Initials ({{ sigs.initials.length }})</h2>
-      <div v-if="sigs.initials.length === 0" class="empty">
-        <v-icon icon="mdi-alpha-i-circle" size="40" />
-        <p>No saved initials yet.</p>
-      </div>
-      <div v-else class="sig-grid">
-        <article v-for="s in sigs.initials" :key="s.id" class="sig-card">
-          <div class="sig-thumb"><img :src="s.dataUrl" alt="" /></div>
-          <div class="sig-meta">
-            <div class="sig-name">{{ s.name }}</div>
-            <div class="sig-sub">{{ dayjs(s.createdAt).format('MMM D, YYYY') }}</div>
-          </div>
-          <div class="sig-actions">
-            <v-btn size="x-small" variant="text" color="error" icon="mdi-trash-can-outline" @click="sigs.remove(s.id)" />
-          </div>
-        </article>
-      </div>
-    </section>
-
-    <SignatureModal v-model="modalOpen" :mode="modalMode" @select="onSelected" />
+    <SignatureModal v-model="modalOpen" @select="onSelected" />
   </div>
 </template>
 

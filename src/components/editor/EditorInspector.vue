@@ -23,9 +23,36 @@ function patchValidation(key: string, value: any) {
     validation: { ...(field.value.validation ?? {}), [key]: value }
   } as any)
 }
+function patchApi(key: string, value: any) {
+  if (!field.value) return
+  editor.updateField(field.value.id, {
+    apiBinding: { url: '', ...(field.value.apiBinding ?? {}), [key]: value }
+  } as any)
+}
 
 const meta = computed(() => field.value ? FIELD_CATALOG[field.value.type] : null)
 const isSelectionType = computed(() => field.value?.type === 'selection')
+const isApiType = computed(() => field.value?.type === 'api')
+
+const API_PRESETS = [
+  { label: 'User profile (mock)', url: 'https://jsonplaceholder.typicode.com/users/1', jsonPath: 'name' },
+  { label: 'User email (mock)', url: 'https://jsonplaceholder.typicode.com/users/1', jsonPath: 'email' },
+  { label: 'Company name (mock)', url: 'https://jsonplaceholder.typicode.com/users/1', jsonPath: 'company.name' },
+  { label: 'Random fact (cat)', url: 'https://catfact.ninja/fact', jsonPath: 'fact' }
+] as const
+
+function applyPreset(preset: typeof API_PRESETS[number]) {
+  if (!field.value) return
+  editor.updateField(field.value.id, {
+    apiBinding: {
+      ...(field.value.apiBinding ?? {}),
+      url: preset.url,
+      jsonPath: preset.jsonPath,
+      method: 'GET'
+    }
+  } as any)
+  editor.commitUpdate('Applied API preset')
+}
 </script>
 
 <template>
@@ -65,7 +92,69 @@ const isSelectionType = computed(() => field.value?.type === 'selection')
         </div>
       </div>
 
-      <v-expansion-panels variant="accordion" multiple :model-value="['general', 'appearance']" class="inspector-panels">
+      <v-expansion-panels variant="accordion" multiple :model-value="['general', 'api', 'appearance']" class="inspector-panels">
+        <v-expansion-panel v-if="isApiType" value="api" title="API Mapping">
+          <template #text>
+            <p class="api-help">
+              Fetch a value from any HTTP endpoint when the signer opens the document.
+              Extract a single field using dot-notation (e.g. <code>user.email</code> or <code>items[0].name</code>).
+            </p>
+
+            <v-text-field
+              :model-value="field.apiBinding?.url"
+              label="Endpoint URL"
+              placeholder="https://api.example.com/users/1"
+              density="compact"
+              @update:model-value="patchApi('url', $event)"
+              @blur="editor.commitUpdate('Updated API URL')"
+            />
+            <div class="row-grid mt-2">
+              <v-select
+                :model-value="field.apiBinding?.method ?? 'GET'"
+                :items="['GET', 'POST']"
+                label="Method"
+                density="compact"
+                @update:model-value="patchApi('method', $event); editor.commitUpdate('Updated API method')"
+              />
+              <v-text-field
+                :model-value="field.apiBinding?.cacheSeconds ?? 60"
+                type="number"
+                label="Cache (s)"
+                density="compact"
+                @update:model-value="patchApi('cacheSeconds', Number($event) || 0)"
+              />
+            </div>
+            <v-text-field
+              class="mt-2"
+              :model-value="field.apiBinding?.jsonPath"
+              label="JSON path"
+              placeholder="data.user.email"
+              density="compact"
+              @update:model-value="patchApi('jsonPath', $event)"
+              @blur="editor.commitUpdate('Updated JSON path')"
+            />
+            <v-text-field
+              class="mt-2"
+              :model-value="field.apiBinding?.defaultValue"
+              label="Fallback value"
+              placeholder="Shown if the API fails"
+              density="compact"
+              @update:model-value="patchApi('defaultValue', $event)"
+              @blur="editor.commitUpdate('Updated fallback')"
+            />
+
+            <div class="api-presets">
+              <span class="api-presets-label">Quick presets</span>
+              <button
+                v-for="p in API_PRESETS"
+                :key="p.label"
+                class="api-preset"
+                @click="applyPreset(p)"
+              >{{ p.label }}</button>
+            </div>
+          </template>
+        </v-expansion-panel>
+
         <v-expansion-panel value="general" title="General">
           <template #text>
             <v-text-field
@@ -273,6 +362,51 @@ const isSelectionType = computed(() => field.value?.type === 'selection')
 .swatch { width: 14px; height: 14px; border-radius: 3px; border: 1px solid rgb(var(--v-theme-border)); margin-right: 4px; }
 
 .inspector-actions { display: flex; flex-direction: column; gap: 8px; }
+
+/* API mapping panel */
+.api-help {
+  font-size: 12px;
+  color: rgb(var(--v-theme-on-surface-variant));
+  margin: 0 0 10px;
+  line-height: 1.45;
+  code {
+    background: rgb(var(--v-theme-surface-variant));
+    padding: 1px 4px;
+    border-radius: 3px;
+    font-size: 11px;
+    font-family: var(--ws-font-mono);
+  }
+}
+.api-presets {
+  margin-top: 12px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.api-presets-label {
+  width: 100%;
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: rgb(var(--v-theme-on-surface-variant));
+  margin-bottom: 2px;
+}
+.api-preset {
+  font-size: 11.5px;
+  padding: 4px 8px;
+  background: rgba(20, 184, 166, 0.10);
+  color: rgb(13, 148, 136);
+  border: 1px solid rgba(20, 184, 166, 0.30);
+  border-radius: 6px;
+  cursor: pointer;
+  font-family: inherit;
+  transition: all 0.12s var(--ws-easing);
+  &:hover {
+    background: rgba(20, 184, 166, 0.18);
+    border-color: rgba(20, 184, 166, 0.50);
+  }
+}
 
 @media (max-width: 1100px) {
   .editor-inspector { width: 280px; }
